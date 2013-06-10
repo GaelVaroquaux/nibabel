@@ -11,6 +11,7 @@
 import sys
 import gzip
 import bz2
+from io import BytesIO
 
 import numpy as np
 
@@ -815,6 +816,15 @@ def finite_range(arr):
     return mn, mx
 
 
+def _preloaded_gzip_opener(fname, mode='r', compresslevel=9):
+    ''' A gzip opener that preloads all the data before passing it to
+    gzip. This optimizes the disk access pattern.
+    '''
+    print 'Preloading %s' % fname
+    data = BytesIO(file(fname).read())
+    return gzip.GzipFile(mode=mode, fileobj=data, compresslevel=9)
+
+
 def allopen(fname, *args, **kwargs):
     ''' Generic file-like object open
 
@@ -833,11 +843,12 @@ def allopen(fname, *args, **kwargs):
         mode = 'rb'
         args = (mode,)
     if fname.endswith('.gz') or fname.endswith('.mgz'):
-        if ('w' in mode and
-            len(args) < 2 and
-            not 'compresslevel' in kwargs):
-            kwargs['compresslevel'] = default_compresslevel
-        opener = gzip.open
+        if 'w' in mode:
+            if len(args) < 2 and not 'compresslevel' in kwargs:
+                kwargs['compresslevel'] = default_compresslevel
+            opener = gzip.open
+        else:
+            opener = _preloaded_gzip_opener
     elif fname.endswith('.bz2'):
         if ('w' in mode and
             len(args) < 3 and
